@@ -10,3 +10,5 @@ tqdm
 opencv-python-headless
 streamlit-webrtc
 ultralytics
+av
+aioice
