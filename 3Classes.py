@@ -13,7 +13,12 @@ import base64
 import os
 import tempfile
 import io
-
+import asyncio
+try:
+    asyncio.get_running_loop()
+except RuntimeError:
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
 # ---------------- Model Definitions & Loading ----------------
 
 # Define CNN Model for Behavior Classification
