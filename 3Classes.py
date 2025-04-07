@@ -14,6 +14,9 @@ import os
 import tempfile
 import io
 import asyncio
+import sys
+if sys.platform.startswith("win"):
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 try:
     asyncio.get_running_loop()
 except RuntimeError:
