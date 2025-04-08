@@ -1,17 +1,17 @@
-import asyncio
 import sys
+import asyncio
+import threading
 
-# --- Setup the asyncio event loop early ---
 if sys.platform.startswith("win"):
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 try:
-    # Ensure there's a running event loop
     asyncio.get_running_loop()
 except RuntimeError:
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
-
+    thread = threading.Thread(target=loop.run_forever, daemon=True)
+    thread.start()
 # ---------------- Import Other Libraries ----------------
 import cv2
 import torch
