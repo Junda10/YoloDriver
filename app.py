@@ -1,3 +1,18 @@
+import asyncio
+import sys
+
+# --- Setup the asyncio event loop early ---
+if sys.platform.startswith("win"):
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+
+try:
+    # Ensure there's a running event loop
+    asyncio.get_running_loop()
+except RuntimeError:
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+
+# ---------------- Import Other Libraries ----------------
 import cv2
 import torch
 import torch.nn as nn
@@ -11,17 +26,6 @@ import av
 from streamlit_webrtc import webrtc_streamer, VideoProcessorBase
 import base64
 import io
-import asyncio
-import sys
-
-# Setup asyncio policy for Windows
-if sys.platform.startswith("win"):
-    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
-try:
-    asyncio.get_running_loop()
-except RuntimeError:
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
 
 # ---------------- Model Definitions & Loading ----------------
 class ImprovedCNN(nn.Module):
@@ -56,7 +60,7 @@ class ImprovedCNN(nn.Module):
             nn.Linear(256, 128),
             nn.ReLU(),
             nn.Dropout(0.4),
-            nn.Linear(128, num_classes),
+            nn.Linear(128, num_classes)
         )
     def forward(self, x):
         x = self.conv_layers(x)
@@ -64,18 +68,25 @@ class ImprovedCNN(nn.Module):
         x = self.fc_layers(x)
         return x
 
+# Define class labels for behavior classification
 class_labels = {0: "Normal Driving", 1: "Operating the Radio", 2: "Reaching Behind"}
 
-# Load models
+# Load YOLO model for person detection
 yolo_model = YOLO("yolov8m.pt")
+
+# Set device and load the CNN model
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 cnn_model = ImprovedCNN(num_classes=3).to(device)
 cnn_model.load_state_dict(torch.load("best_model_CNN_99.33.pth", map_location=device))
 cnn_model.eval()
+
+# Create feature extractor from CNN (using conv_layers and flatten)
 feature_extractor = nn.Sequential(cnn_model.conv_layers, nn.Flatten()).to(device)
+
+# Load the trained SVM model
 svm_model = joblib.load("svm_classifier_gridsearch_yolo_c057.pkl")
 
-# ---------------- Preprocessing ----------------
+# ---------------- Preprocessing Setup ----------------
 transform = transforms.Compose([
     transforms.ToPILImage(),
     transforms.Resize((224, 224)),
@@ -85,11 +96,13 @@ transform = transforms.Compose([
 ])
 
 def overlay_text(img, texts, start_y=50, dy=20):
+    """Overlay multiple lines of text on an image."""
     for i, text in enumerate(texts):
         y = start_y + i * dy
         cv2.putText(img, text, (10, y), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
 
 def process_frame(img):
+    """Process the frame: detect person using YOLO, classify behavior via CNN-SVM, and overlay debugging info."""
     debug_text = [f"Frame shape: {img.shape}"]
     try:
         image_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
@@ -154,10 +167,11 @@ def process_frame(img):
     overlay_text(img, debug_text)
     return img, detected_label
 
-# ---------------- Video Processor ----------------
+# ---------------- Video Processor Class ----------------
 class VideoProcessor(VideoProcessorBase):
     def __init__(self):
         self.frame_count = 0
+
     def recv(self, frame: av.VideoFrame) -> av.VideoFrame:
         self.frame_count += 1
         img = frame.to_ndarray(format="bgr24")
@@ -219,6 +233,7 @@ class VideoProcessor(VideoProcessorBase):
         cv2.putText(img, f"Status: {detected_label}", (10, 30), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
         self._overlay_text(img, debug_text)
         return av.VideoFrame.from_ndarray(img, format="bgr24")
+
     def _overlay_text(self, img, texts, start_y=50, dy=20):
         for i, text in enumerate(texts):
             y = start_y + i * dy
